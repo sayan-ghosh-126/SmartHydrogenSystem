@@ -1,11 +1,12 @@
-# syntax=docker/dockerfile:1
 FROM python:3.11-slim
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app
+
 WORKDIR /app
-COPY requirements.txt ./requirements.txt
+
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-COPY . /app
-ENV PORT=8000
-EXPOSE 8000
-WORKDIR /app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+COPY . ./
+
+EXPOSE 8050
+ENV PORT=8050
+CMD ["python", "-m", "backend.server"]

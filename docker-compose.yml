@@ -1,39 +1,26 @@
-version: "3.9"
+version: '3.8'
 services:
-  db:
-    image: postgres:15
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - db_data:/var/lib/postgresql/data
-      - ./SmartHydrogenSystem/db/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
-    ports:
-      - "5432:5432"
   backend:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
-    restart: always
+      context: ./backend
+    image: smart-hydrogen-backend
+    container_name: smart_hydrogen_backend
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      SCHEMA_PATH: /app/SmartHydrogenSystem/db/schema.sql
-    depends_on:
-      - db
+      - PORT=8050
     ports:
-      - "8000:8000"
+      - "8050:8050"
+    restart: unless-stopped
 
   frontend:
     build:
-      context: frontend
+      context: ./frontend
       dockerfile: Dockerfile
-    restart: always
+    image: smart-hydrogen-frontend
+    container_name: smart_hydrogen_frontend
+    environment:
+      - VITE_BACKEND_URL=http://backend:8050
+    ports:
+      - "5173:5173"
     depends_on:
       - backend
-    ports:
-      - "80:80"
-
-volumes:
-  db_data:
+    restart: unless-stopped
