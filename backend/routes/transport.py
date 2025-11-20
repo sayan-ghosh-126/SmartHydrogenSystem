@@ -147,6 +147,46 @@ def demand_predict(body: DemandBody):
     demand = max(100.0, 1000.0 * (eff / 100.0))
     return {"ok": True, "predicted_demand_kg": round(demand, 1), "eff_score": eff}
 
+# ML namespace (aliases)
+@router.get("/ml/demand-predict")
+def ml_demand_predict(city: str = "kolkata"):
+    from ..transport_ml import predict_efficiency
+    features = {"distance_km": 20.0, "avg_traffic_score": 0.5, "weather_risk": 0.3, "mode": "truck"}
+    eff = predict_efficiency(features)
+    demand = max(100.0, 1000.0 * (eff / 100.0))
+    return {"ok": True, "city": city, "predicted_demand_kg": round(demand, 1), "eff_score": eff}
+
+class RouteOptimizeBody(BaseModel):
+    source: List[float]
+    destination: List[float]
+    mode: str = "truck"
+
+@router.post("/ml/route-optimize")
+def ml_route_optimize(body: RouteOptimizeBody):
+    from ..transport_logic import osrm_route, compute_distance, BASE_RATE
+    src = (float(body.source[0]), float(body.source[1]))
+    dst = (float(body.destination[0]), float(body.destination[1]))
+    info = osrm_route(src, dst)
+    distance = info.get("distance_km") or compute_distance(src, dst)
+    rate = BASE_RATE.get(body.mode, 1.0)
+    cost_estimate = distance * rate
+    from ..transport_ml import predict_efficiency
+    eff = predict_efficiency({
+        "distance_km": distance,
+        "avg_traffic_score": 0.5,
+        "weather_risk": 0.3,
+        "mode": body.mode,
+    })
+    return {"ok": True, "route": info, "distance_km": distance, "efficiency_score": eff, "cost_estimate": round(cost_estimate, 2)}
+
+class FleetDecisionBody(BaseModel):
+    destination: List[float]
+    hydrogen_load: float
+
+@router.post("/ml/fleet-decision")
+def ml_fleet_decision(body: FleetDecisionBody):
+    return fleet_optimize(OptimizeBody(destination=body.destination, hydrogen_load=body.hydrogen_load))
+
 @router.get("/storage")
 def storage():
     return [{"id": "st-1", "capacity_kg": 500000, "level_kg": 320000}, {"id": "st-2", "capacity_kg": 350000, "level_kg": 280000}]
