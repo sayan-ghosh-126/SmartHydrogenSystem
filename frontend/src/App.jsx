@@ -1,5 +1,6 @@
 import React from 'react'
 import TransportFleet from './components/TransportFleet.jsx'
+import RealTimeMap from './components/RealTimeMap.jsx'
 
 export default function App() {
   return (
@@ -9,6 +10,10 @@ export default function App() {
       </header>
       <main>
         <TransportFleet />
+        <div className="content" style={{ marginTop: 16 }}>
+          <h2>Real-time Simulator</h2>
+          <RealTimeMap />
+        </div>
       </main>
     </div>
   )

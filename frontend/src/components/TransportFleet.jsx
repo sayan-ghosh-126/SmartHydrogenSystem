@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import RouteMap from './RouteMap.jsx'
+import { api } from '../lib/api.js'
+import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js'
+Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
 const capacityByMode = {
   truck: 30000,
@@ -31,9 +34,8 @@ export default function TransportFleet() {
       setLoading(true)
       setError('')
       try {
-        const resp = await fetch('/api/transport/fleet')
-        const json = await resp.json()
-        setData(json.fleet || [])
+        const resp = await api.get('/fleet?decision_mode=ml')
+        setData(resp || [])
       } catch (e) {
         setError('Failed to load fleet')
       } finally {
@@ -74,7 +76,9 @@ export default function TransportFleet() {
                 <th>Load (kg)</th>
                 <th>Destination</th>
                 <th>Decision</th>
-                <th>Efficiency Score</th>
+                <th>Efficiency</th>
+                <th>Capacity</th>
+                <th>Cost</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -104,9 +108,9 @@ export default function TransportFleet() {
                         AI Recommendation: <ActionBadge action={v.recommended_action} />
                       </div>
                     </td>
-                    <td>
-                      <ScoreBadge score={v.efficiency_score ?? 0} />
-                    </td>
+                    <td><ScoreBadge score={v.efficiency_score ?? 0} /></td>
+                    <td>{Math.round(v.capacity)}</td>
+                    <td>{v.cost_estimate?.toFixed(2)}</td>
                     <td>
                       <button
                         className="view-route"
@@ -119,6 +123,21 @@ export default function TransportFleet() {
                         }
                       >
                         View Route
+                      </button>
+                      <button
+                        className="view-route"
+                        style={{ marginLeft: 8, background: '#8e24aa' }}
+                        onClick={async () => {
+                          try {
+                            const dest = v.destination
+                            const payload = { vehicle_id: v.vehicle_id, destination: dest, hydrogen_load: v.load }
+                            await api.post('/fleet/assign', payload)
+                            const refreshed = await api.get('/fleet?decision_mode=ml')
+                            setData(refreshed || [])
+                          } catch (e) {}
+                        }}
+                      >
+                        Assign
                       </button>
                     </td>
                   </tr>
@@ -172,6 +191,40 @@ export default function TransportFleet() {
                   </div>
                 )
               })}
+            </div>
+          </div>
+
+          <div className="card">
+            <h3>Model Controls</h3>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="view-route" onClick={async () => {
+                try {
+                  await api.post('/train', {})
+                  const refreshed = await api.get('/fleet?decision_mode=ml')
+                  setData(refreshed || [])
+                } catch (e) {}
+              }}>Retrain Model</button>
+              <button className="view-route" style={{ background: '#4caf50' }} onClick={async () => {
+                try {
+                  const resp = await api.get('/fleet?decision_mode=rule')
+                  setData(resp || [])
+                } catch (e) {}
+              }}>Toggle Rule-based</button>
+            </div>
+            <div style={{ marginTop: 8, color: '#94a3b8' }}>
+              This model uses synthetic training data for demo purposes
+            </div>
+          </div>
+
+          <div className="card">
+            <h3>Demand Prediction</h3>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="view-route" onClick={async () => {
+                try {
+                  const res = await api.post('/demand/predict', { region: 'demo', weather_risk: 0.3, traffic_score: 0.5 })
+                  alert(`Predicted hydrogen demand: ${res.predicted_demand_kg} kg (eff ${Math.round(res.eff_score)})`)
+                } catch (e) {}
+              }}>Predict Demand</button>
             </div>
           </div>
         </aside>

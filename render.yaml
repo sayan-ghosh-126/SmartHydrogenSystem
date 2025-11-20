@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: smart-hydrogen-backend
+    env: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: backend/Dockerfile
+    autoDeploy: true
+  - type: web
+    name: smart-hydrogen-frontend
+    env: docker
+    plan: free
+    rootDir: frontend
+    dockerfilePath: frontend/Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://smart-hydrogen-backend.onrender.com/api

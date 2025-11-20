@@ -1,3 +1,11 @@
 fastapi==0.115.2
 uvicorn[standard]==0.30.0
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+scikit-learn==1.5.2
+joblib==1.4.2
 requests==2.32.3
+aiohttp==3.10.10
+python-dotenv==1.0.1
+sse-starlette==1.6.5
+geopy==2.4.1

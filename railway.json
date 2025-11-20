@@ -1,0 +1,20 @@
+{
+  "services": [
+    {
+      "name": "backend",
+      "source": "backend",
+      "dockerfilePath": "backend/Dockerfile",
+      "env": {
+        "PORT": "8000"
+      }
+    },
+    {
+      "name": "frontend",
+      "source": "frontend",
+      "dockerfilePath": "frontend/Dockerfile",
+      "env": {
+        "VITE_API_BASE_URL": "https://smart-hydrogen-backend.railway.app/api"
+      }
+    }
+  ]
+}

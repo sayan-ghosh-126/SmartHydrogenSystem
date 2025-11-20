@@ -1,19 +1,10 @@
-import math
 import random
 from typing import Dict, Tuple, Any
 
 import requests
+from geopy.distance import geodesic
 
-
-def haversine_km(src: Tuple[float, float], dst: Tuple[float, float]) -> float:
-    R = 6371.0
-    lat1, lon1 = math.radians(src[0]), math.radians(src[1])
-    lat2, lon2 = math.radians(dst[0]), math.radians(dst[1])
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
+from .transport_ml import predict_efficiency, recommend_action
 
 
 MODE_CAPACITY = {
@@ -53,7 +44,17 @@ def osrm_route(src: Tuple[float, float], dst: Tuple[float, float]) -> Dict[str, 
     return {"distance_km": None, "duration_min": None, "geometry": None}
 
 
-def evaluate_vehicle(vehicle: Dict[str, Any]) -> Dict[str, Any]:
+def compute_distance(src: Tuple[float, float], dst: Tuple[float, float]) -> float:
+    try:
+        return geodesic(src, dst).km
+    except Exception:
+        return 0.0
+
+
+BASE_RATE = {"truck": 1.0, "pipeline": 0.4, "cargo ship": 0.6, "tanker": 0.8}
+
+
+def evaluate_vehicle(vehicle: Dict[str, Any], decision_mode: str = "ml") -> Dict[str, Any]:
     mode = vehicle.get("mode", "truck")
     status = vehicle.get("status", "idle")
     load = float(vehicle.get("load", 0))
@@ -61,53 +62,45 @@ def evaluate_vehicle(vehicle: Dict[str, Any]) -> Dict[str, Any]:
     dst = tuple(vehicle.get("destination", [0.0, 0.0]))
 
     capacity = MODE_CAPACITY.get(mode, 30000.0)
-    overloaded = load > capacity
-    load_ratio = min(load / capacity, 1.5)
-
-    straight_distance = haversine_km(src, dst)
-    route_info = osrm_route(src, dst)
-    route_distance = route_info.get("distance_km") or straight_distance
-
     seed = hash(vehicle.get("id", "0")) % 100000
     rng = random.Random(seed)
-    traffic_factor = 1.0 + rng.uniform(-0.1, 0.25)
-    weather_factor = 1.0 + rng.uniform(-0.05, 0.2)
+    traffic = max(0.0, min(1.0, 0.5 + rng.uniform(-0.2, 0.2)))
+    weather = max(0.0, min(1.0, 0.5 + rng.uniform(-0.25, 0.25)))
 
-    energy_factor = MODE_ENERGY_FACTOR.get(mode, 1.0)
+    route_info = osrm_route(src, dst)
+    route_distance = route_info.get("distance_km") or compute_distance(src, dst)
 
-    base = 100.0
-    penalty = 0.0
-    penalty += min(route_distance / 20.0, 40.0)
-    penalty += load_ratio * 20.0
-    penalty += (traffic_factor - 1.0) * 100.0 * 0.2
-    penalty += (weather_factor - 1.0) * 100.0 * 0.15
-    penalty += energy_factor * 10.0
-    if status == "maintenance":
-        penalty += 30.0
-    elif status == "loading":
-        penalty += 10.0
+    rate = BASE_RATE.get(mode, 1.0)
+    cost_estimate = route_distance * rate + weather * 10.0 + traffic * 12.0
 
-    score = max(0.0, min(100.0, base - penalty))
-
-    if status == "maintenance":
-        action = "hold"
-    elif overloaded:
-        action = "load-balance"
-    elif score < 50.0:
-        action = "hold"
+    if decision_mode == "ml":
+        features = {
+            "distance_km": route_distance,
+            "avg_traffic_score": traffic,
+            "weather_risk": weather,
+            "mode": mode,
+        }
+        eff = predict_efficiency(features)
+        action = recommend_action(eff, load, capacity)
     else:
-        detour_ratio = route_distance / max(straight_distance, 0.1)
-        if detour_ratio > 1.3:
-            action = "reroute"
-        elif status in ("idle", "loading"):
-            action = "dispatch"
+        overloaded = load > capacity
+        base = 100.0
+        penalty = min(route_distance / 25.0, 45.0) + traffic * 20.0 + weather * 15.0 + (1.2 - rate) * 12.0
+        eff = max(0.0, min(100.0, base - penalty))
+        if status == "maintenance":
+            action = "hold"
+        elif overloaded:
+            action = "load-balance"
+        elif eff < 50.0:
+            action = "hold"
         else:
             action = "dispatch"
 
     return {
         "recommended_action": action,
-        "efficiency_score": round(score, 1),
+        "efficiency_score": round(eff, 1),
         "recommended_route": route_info,
         "capacity": capacity,
-        "overloaded": overloaded,
+        "cost_estimate": round(cost_estimate, 2),
+        "distance_km": round(route_distance, 2),
     }

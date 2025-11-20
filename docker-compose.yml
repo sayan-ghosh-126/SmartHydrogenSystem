@@ -4,11 +4,12 @@ services:
     build:
       context: ./backend
     image: smart-hydrogen-backend
-    container_name: smart_hydrogen_backend
+    container_name: backend
     environment:
-      - PORT=8050
+      - PORT=8000
+      - DATABASE_URL=${DATABASE_URL}
     ports:
-      - "8050:8050"
+      - "8000:8000"
     restart: unless-stopped
 
   frontend:
@@ -17,10 +18,13 @@ services:
       dockerfile: Dockerfile
     image: smart-hydrogen-frontend
     container_name: smart_hydrogen_frontend
-    environment:
-      - VITE_BACKEND_URL=http://backend:8050
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://backend:8000/api
     ports:
-      - "5173:5173"
+      - "80:80"
     depends_on:
       - backend
     restart: unless-stopped
