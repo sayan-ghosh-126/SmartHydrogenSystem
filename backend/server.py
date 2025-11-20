@@ -2,6 +2,7 @@ from typing import List, Dict, Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import os
 from fastapi import Request
 
 from .transport_ml import init_model
@@ -13,9 +14,11 @@ from .simulator import Simulator
 
 app = FastAPI(title="Smart Hydrogen Transport API")
 
+cors_env = os.getenv("CORS_ORIGINS", "*")
+origins = [o.strip() for o in cors_env.split(",")] if cors_env else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*", "http://localhost", "http://localhost:5173"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

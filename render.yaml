@@ -6,6 +6,11 @@ services:
     rootDir: backend
     dockerfilePath: backend/Dockerfile
     autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: CORS_ORIGINS
+        value: "*"
   - type: web
     name: smart-hydrogen-frontend
     env: docker

@@ -5,7 +5,8 @@
       "source": "backend",
       "dockerfilePath": "backend/Dockerfile",
       "env": {
-        "PORT": "8000"
+        "PORT": "8000",
+        "CORS_ORIGINS": "*"
       }
     },
     {

@@ -1,0 +1,73 @@
+name: Deploy
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Frontend build
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+        run: |
+          npm ci
+          npm run build
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Backend install
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Backend unit check
+        working-directory: backend
+        run: |
+          python -c "import backend.server as s; print('ok')"
+      - name: Trigger Render backend deploy
+        if: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK != '' }}
+        run: |
+          curl -X POST "$RENDER_BACKEND_DEPLOY_HOOK"
+        env:
+          RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+      - name: Trigger Render frontend deploy
+        if: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK != '' }}
+        run: |
+          curl -X POST "$RENDER_FRONTEND_DEPLOY_HOOK"
+        env:
+          RENDER_FRONTEND_DEPLOY_HOOK: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
+      - name: Trigger Railway deploy
+        if: ${{ secrets.RAILWAY_TOKEN != '' }}
+        uses: railwayapp-io/railway-action@v1
+        with:
+          service: "SmartHydrogenSystem"
+          token: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Verify backend health
+        if: ${{ secrets.BACKEND_URL != '' }}
+        run: |
+          curl -sSf "$BACKEND_URL/api/health" | jq .
+          curl -sSf "$BACKEND_URL/api/fleet" | jq . | head -n 20
+          curl -sSf "$BACKEND_URL/api/ml/demand-predict?city=kolkata" | jq .
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+      - name: Verify ML endpoints
+        if: ${{ secrets.BACKEND_URL != '' }}
+        run: |
+          curl -sSf -X POST "$BACKEND_URL/api/ml/route-optimize" -H 'Content-Type: application/json' -d '{"source":[19.0760,72.8777],"destination":[22.5726,88.3639],"mode":"truck"}' | jq .
+          curl -sSf -X POST "$BACKEND_URL/api/ml/fleet-decision" -H 'Content-Type: application/json' -d '{"destination":[22.5726,88.3639],"hydrogen_load":45000}' | jq .
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+      - name: Print frontend URL
+        if: ${{ secrets.FRONTEND_URL != '' }}
+        run: |
+          echo "Frontend: $FRONTEND_URL"
+        env:
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
